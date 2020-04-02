@@ -1,20 +1,16 @@
 {
-  "name": "POS-Solutions",
+  "name": "api",
   "version": "1.0.0",
-  "description": "Project done by Himanshu Kashyap and Nilesh Yadav",
-  "main": "index.js",
+  "description": "Rest Api ",
+  "main": "server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/attainu/POS-Solutions.git"
-  },
-  "keywords": [],
-  "author": "",
+  "author": "kaha",
   "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/attainu/POS-Solutions/issues"
-  },
-  "homepage": "https://github.com/attainu/POS-Solutions#readme"
+  "dependencies": {
+    "body-parser": "^1.19.0",
+    "express": "^4.17.1",
+    "mongoose": "^5.9.6"
+  }
 }
