@@ -1,6 +1,13 @@
-const http = require('http')
-const pro = require('./app')
+const http = require("http");
+const pro = require("./app");
+var https = require("https");
+const fs = require("fs");
+var server = https.createServer(
+  {
+    key: fs.readFileSync("server.key"),
+    cert: fs.readFileSync("server.cert"),
+  },
+  pro
+);
 
-var server = http.createServer(pro)
-
-server.listen(8000)
+server.listen(8000);

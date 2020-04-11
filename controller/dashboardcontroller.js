@@ -1,13 +1,14 @@
 const ProductM = require("../model/product");
 const cart = require("../model/dashboard");
 const bill = require("../model/bills");
-
+var cartdetails = require("../model/cart");
+const offer = require("../model/offer");
 module.exports = {
   cartDetails: (req, res, next) => {
     cart
       .find()
       .exec()
-      .then(data => {
+      .then((data) => {
         res
           .status(400)
           .json({ message: "Here is your cart details", data: data });
@@ -15,33 +16,59 @@ module.exports = {
   },
   checkOut: (req, res, next) => {
     var arr = [];
-    var paymentmethod = req.query.paymentmethod;
-    var customer = req.query.customer;
+    var paymentmethod = req.body.paymentmethod;
+    var customer = req.body.customer;
+    var customerNumber = req.body.cnumber;
+
     var i = 0;
     cart
       .find()
       .exec()
-      .then(data => {
-        data.forEach(element => {
+      .then((data) => {
+        data.forEach((element) => {
+          var id = element.Product[0].pid;
+          var quantity = element.Product[0].quantity;
+          ProductM.findOne({ _id: id })
+            .exec()
+            .then((ndata) => {
+              //var oldq = ndata.stock;
+              ndata.stock = ndata.stock - quantity;
+              ndata.save((err, data) => {
+                console.log("Updated Stock", data.stock);
+              });
+            })
+            .catch((err) => {
+              console.log(err);
+            });
           arr.push(data[i].Product);
           i++;
+          return;
         });
-        console.log(arr);
-        var billgen = new bill({
-          Product: arr,
-          Customer: "me",
-          Offer: "you",
-          SubTotal: 1234
+      })
+      .then(() => {
+        cartdetails.findOne({}).exec((err, ncart) => {
+          var total = ncart.Total;
+          var offer = ncart.offers;
+          console.log(total, offer);
+          var billgen = new bill({
+            Product: arr,
+            Customer: req.body.customer,
+            Number: req.body.cnumber,
+            Offer: offer,
+            SubTotal: total,
+            Pmethod: req.body.Pmethod
+          });
+          billgen.save().then((result) => {
+            res.json({ "Invoice data": result });
+            cart
+              .remove()
+              .exec()
+              .then((result) => {
+                console.log("cart cleared");
+              });
+          });
         });
-        billgen.save().then(result => {
-          res.json({ "Invoice data": result });
-          cart
-            .remove()
-            .exec()
-            .then(result => {
-              console.log("cart cleared");
-            });
-        });
+        //console.log("total accesesdstfacsh", total);
       });
     if (paymentmethod == "Cash") {
       var a = 1;
@@ -90,7 +117,7 @@ module.exports = {
 
       var promise = ProductM.find({ $or: [{ name: current }] })
         .exec()
-        .then(result => {
+        .then((result) => {
           console.log("Found Product", result[0].name);
           var cart_Product = {};
           cart_Product.name = result[0].name;
@@ -117,20 +144,21 @@ module.exports = {
           //cart.totat = total_value;
           return cart_Product;
         })
-        .then(function(data) {
+        .then(function (data) {
           var newcart = new cart({
             Product: data,
             Customer: customer,
-            SubTotal: final_price
+            SubTotal: final_price,
           });
 
-          newcart.save().then(result => {
+          newcart.save().then((result) => {
             console.log("customer", customer, "subt", final_price);
             res.json({ cart: result });
 
             console.log(result);
           });
-        });
+        })
+        .catch((error) => res.json({ error: error.message }));
       //promises.push(promise);
 
       //start++;
@@ -142,24 +170,56 @@ module.exports = {
     }
     //res.status(400).json({ message: req.query.final });
   },
+
+  //call everytime you update a product
   currentTotal: (req, res, next) => {
     var total = 0;
     var tnumber = 0;
     cart
       .find()
       .exec()
-      .then(result => {
-        result.forEach(function(value) {
+      .then((result) => {
+        result.forEach(function (value) {
           //apply discount and calculate total
           var quantity = value.Product[0].quantity;
           total = total + quantity * value.SubTotal;
           tnumber = tnumber + quantity;
+          //const cartdetails = require("../model/cart");
+          console.log(total, tnumber);
+
+          // offer.find({ offercode: result });
         });
-        console.log(total);
-        res.json({
-          total: total,
-          Number_of_Products: tnumber
-        });
+      })
+      .then(() => {
+        cartdetails
+          .findOne()
+          .exec()
+          .then((result) => {
+            console.log(result.offers);
+            console.log(total);
+            offer
+              .find({ offercode: result.offers })
+              .exec()
+              .then((data) => {
+                console.log("sadf", total);
+                const distotal = total * (1 - data[0].offerdiscount / 100);
+                res.json({ "Your Total after discount and tax is ": distotal });
+                result.Total = distotal;
+                result.save(function (err, data) {
+                  console.log(data);
+                });
+              })
+              .catch((err) => {
+                return res.status(400).json({
+                  message: err,
+                  message: "err offer does not exist.Please apply again",
+                });
+              });
+          });
+        //res.json({
+        // total: total,
+        //Number_of_Products: tnumber,
+        //});
       });
   },
   changeProductQuantity: (req, res, next) => {
@@ -172,19 +232,19 @@ module.exports = {
       cart
         .find({ Product: { $elemMatch: { name: id } } })
         .exec()
-        .then(data => {
+        .then((data) => {
           return (quantity = data[0].Product[0].quantity);
         })
-        .then(quantity => {
+        .then((quantity) => {
           quantity++;
 
           cart.findOneAndUpdate(
             { Product: { $elemMatch: { name: id } } },
             { $set: { "Product.$.quantity": quantity } },
             {
-              new: true
+              new: true,
             },
-            function(err, doc) {
+            function (err, doc) {
               if (err) {
                 console.log("err");
               } else {
@@ -192,7 +252,7 @@ module.exports = {
                 //console.log(quantity);
                 res.status(402).json({
                   message: "Quantity Increased by 1",
-                  cartp: doc
+                  cartp: doc,
                 });
               }
             }
@@ -204,19 +264,19 @@ module.exports = {
         cart
           .find({ Product: { $elemMatch: { name: id } } })
           .exec()
-          .then(data => {
+          .then((data) => {
             return (quantity = data[0].Product[0].quantity);
           })
-          .then(quantity => {
+          .then((quantity) => {
             quantity--;
 
             cart.findOneAndUpdate(
               { Product: { $elemMatch: { name: id } } },
               { $set: { "Product.$.quantity": quantity } },
               {
-                new: true
+                new: true,
               },
-              function(err, doc) {
+              function (err, doc) {
                 if (err) {
                   console.log("err");
                 } else {
@@ -224,7 +284,7 @@ module.exports = {
                   //console.log(quantity);
                   res.status(402).json({
                     message: " quantity decreased by 1",
-                    cartp: doc
+                    cartp: doc,
                   });
                 }
               }
@@ -241,9 +301,9 @@ module.exports = {
       cart
         .deleteOne({ Product: { $elemMatch: { name: id } } })
         .exec()
-        .then(data => {
+        .then((data) => {
           res.status(400).json({ message: "Deleted Succesffully" });
         });
     }
-  }
+  },
 };
